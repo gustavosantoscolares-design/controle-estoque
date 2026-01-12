@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Controle de Estoque Tablet</title>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+  <style>
+    body { font-family: Arial, sans-serif; background: #f3f4f6; margin: 0; padding: 0; }
+    header { background: #1e3a8a; color: white; padding: 1rem; text-align: center; }
+    main { padding: 1rem; }
+    table { width: 100%; border-collapse: collapse; background: white; }
+    th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
+    th { background: #2563eb; color: white; }
+    tr:nth-child(even) { background: #f9fafb; }
+
+    button {
+      background: #2563eb;
+      color: white;
+      border: none;
+      padding: 8px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      margin: 4px;
+    }
+    button:hover { background: #1d4ed8; }
+
+    #clearBtn { background: #dc2626; }
+    #clearBtn:hover { background: #b91c1c; }
+
+    #modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      justify-content: center;
+      align-items: center;
+    }
+    #modal-content {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      text-align: center;
+      width: 80%;
+      max-width: 300px;
+    }
+    input[type='number'] {
+      width: 80%;
+      padding: 8px;
+      margin: 8px 0;
+    }
+  </style>
+</head>
+
+<body>
+<header>
+  <h2>Controle de Estoque — Tablet</h2>
+</header>
+
+<main>
+  <div style="margin-bottom:1rem; text-align:center;">
+    <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" />
+    <button id="exportBtn">Exportar XLSX</button>
+    <button id="clearBtn">Limpar tudo</button>
+  </div>
+
+  <div id="tableContainer"></div>
+</main>
+
+<div id="modal">
+  <div id="modal-content">
+    <h3 id="modalTitle"></h3>
+    <input type="number" id="quantityInput" placeholder="Quantidade" />
+    <div>
+      <button id="addBtn">Adicionar</button>
+      <button id="closeModal">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  let tableData = [];
+  let currentCell = null;
+
+  document.getElementById('fileInput').addEventListener('change', handleFile);
+  document.getElementById('exportBtn').addEventListener('click', exportXLSX);
+  document.getElementById('clearBtn').addEventListener('click', clearAll);
+  document.getElementById('closeModal').addEventListener('click', () => modal(false));
+  document.getElementById('addBtn').addEventListener('click', addQuantity);
+
+  function handleFile(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = evt => {
+      const data = new Uint8Array(evt.target.result);
+      const workbook = XLSX.read(data, { type: 'array' });
+      const ws = workbook.Sheets[workbook.SheetNames[0]];
+      tableData = XLSX.utils.sheet_to_json(ws, { header: 1 });
+
+      for (let i = 1; i < tableData.length; i++) {
+        for (let j = 1; j < tableData[0].length; j++) {
+          if (!tableData[i][j]) tableData[i][j] = 0;
+        }
+      }
+      renderTable();
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+  function renderTable() {
+    const container = document.getElementById('tableContainer');
+    container.innerHTML = '';
+    if (!tableData.length) return;
+
+    const table = document.createElement('table');
+
+    const header = document.createElement('tr');
+    tableData[0].forEach(h => {
+      const th = document.createElement('th');
+      th.textContent = h;
+      header.appendChild(th);
+    });
+    table.appendChild(header);
+
+    for (let i = 1; i < tableData.length; i++) {
+      const tr = document.createElement('tr');
+      tableData[i].forEach((cell, j) => {
+        const td = document.createElement('td');
+        td.textContent = cell;
+        if (j > 0) {
+          td.style.cursor = 'pointer';
+          td.onclick = () => openModal(i, j);
+        }
+        tr.appendChild(td);
+      });
+      table.appendChild(tr);
+    }
+    container.appendChild(table);
+  }
+
+  function openModal(row, col) {
+    currentCell = { row, col };
+    modalTitle.textContent = `${tableData[row][0]} — ${tableData[0][col]}`;
+    quantityInput.value = '';
+    modal(true);
+  }
+
+  function addQuantity() {
+    const qty = parseFloat(quantityInput.value);
+    if (isNaN(qty)) return;
+    tableData[currentCell.row][currentCell.col] += qty;
+    renderTable();
+    modal(false);
+  }
+
+  function clearAll() {
+    if (!confirm('Deseja limpar tudo, inclusive o arquivo carregado?')) return;
+    tableData = [];
+    tableContainer.innerHTML = '';
+    fileInput.value = '';
+  }
+
+  function exportXLSX() {
+    if (!tableData.length) return alert('Nenhuma tabela para exportar');
+    const ws = XLSX.utils.aoa_to_sheet(tableData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Estoque');
+    XLSX.writeFile(wb, 'estoque_atual.xlsx');
+  }
+
+  function modal(show) {
+    document.getElementById('modal').style.display = show ? 'flex' : 'none';
+  }
+</script>
+</body>
+</html>
